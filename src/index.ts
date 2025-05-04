@@ -1,14 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { McpAgent } from "./agents/mcp";
+import { McpAgent } from "agents/mcp";
 
-// Define our MCP agent with tools
+// Export the agent class for Durable Object binding
 export class MyMCP extends McpAgent {
+	// Server instance can be initialized here or in constructor/init
 	server = new McpServer({
 		name: "Authless Calculator",
 		version: "1.0.0",
 	});
 
+	// Tool initialization - McpAgent base class constructor/lifecycle should call this
 	async init() {
 		// Simple addition tool
 		this.server.tool(
@@ -56,12 +58,20 @@ export class MyMCP extends McpAgent {
 			}
 		);
 	}
+
+	// The McpAgent base class (and Durable Object infrastructure)
+	// provides the actual fetch method called by the stub below.
 }
 
-// Instantiate the agent **once**
-const agent = new MyMCP();
-// Initialize the tools immediately
-agent.init();
+// Default export: Worker fetch handler using Durable Objects
+export default {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+		// Use a consistent name for the Durable Object instance
+		const durableObjectName = "mcp-agent"; 
+		let id = env.MCP_OBJECT.idFromName(durableObjectName);
+		let stub = env.MCP_OBJECT.get(id);
 
-// Export the initialized server instance directly
-export default agent.server;
+		// Forward the request to the Durable Object's fetch handler
+		return stub.fetch(request);
+	},
+};
